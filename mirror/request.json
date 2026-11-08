@@ -4,7 +4,5 @@
   "sha256": "f9d0a63361070f7495e1dcc856603cec62f08f337ed1866a782bfb2270a629c0",
   "notes": [
     "Check for updates no longer says you are up to date when it could not reach the update server. It now tells you it could not connect, so you know to try again or download the newest Wayzerr.dmg."
-  ],
-  "url": "https://wayzerr.com/Wayzerr-1.3.45.dmg",
-  "rev": 2
+  ]
 }
