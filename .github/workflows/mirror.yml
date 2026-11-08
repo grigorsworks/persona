@@ -32,7 +32,12 @@ jobs:
           [[ "$SRC" == https://wayzerr.com/* ]] || { echo "source must be on wayzerr.com"; exit 1; }
           [[ "$SHA" =~ ^[a-f0-9]{64}$ ]] || { echo "bad sha256"; exit 1; }
           FILE="Wayzerr-$VERSION.dmg"
-          curl -fL --retry 5 --retry-delay 5 -o "$FILE" "$SRC"
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+          CODE=$(curl -sSL --retry 3 --retry-delay 5 -A "$UA" -D headers.txt -o "$FILE" -w '%{http_code}' "$SRC" || true)
+          if [ "$CODE" != "200" ]; then
+            echo "::error::download from $SRC answered $CODE: $(head -c 400 headers.txt | tr '\r\n' '  ') BODY: $(head -c 300 "$FILE" | tr '\r\n' '  ')"
+            exit 1
+          fi
           echo "$SHA  $FILE" | sha256sum -c -
           SIZE=$(stat -c %s "$FILE")
           jq -n --arg v "$VERSION" --arg b "$BUILD" --arg u "https://github.com/$REPO/releases/download/v$VERSION/$FILE" \
