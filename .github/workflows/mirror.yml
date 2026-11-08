@@ -1,0 +1,47 @@
+name: Mirror update
+
+# Copies a published Wayzerr update to a GitHub release, so people who cannot reach wayzerr.com
+# (for example when an internet provider blocks part of Cloudflare) still receive updates.
+# It runs when mirror/request.json changes. The release holds the installer and a latest.json feed.
+
+on:
+  push:
+    branches: [main]
+    paths: ['mirror/request.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download, verify and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version mirror/request.json)
+          BUILD=$(jq -r .build mirror/request.json)
+          SRC=$(jq -r .url mirror/request.json)
+          SHA=$(jq -r .sha256 mirror/request.json)
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad version"; exit 1; }
+          [[ "$SRC" == https://wayzerr.com/* ]] || { echo "source must be on wayzerr.com"; exit 1; }
+          [[ "$SHA" =~ ^[a-f0-9]{64}$ ]] || { echo "bad sha256"; exit 1; }
+          FILE="Wayzerr-$VERSION.dmg"
+          curl -fL --retry 5 --retry-delay 5 -o "$FILE" "$SRC"
+          echo "$SHA  $FILE" | sha256sum -c -
+          SIZE=$(stat -c %s "$FILE")
+          jq -n --arg v "$VERSION" --arg b "$BUILD" --arg u "https://github.com/$REPO/releases/download/v$VERSION/$FILE" \
+                --arg s "$SHA" --argjson z "$SIZE" --slurpfile r mirror/request.json \
+             '{version:$v, build:$b, url:$u, sha256:$s, size:$z, notes:$r[0].notes}' > latest.json
+          cat latest.json
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "$FILE" latest.json --clobber
+            gh release edit "v$VERSION" --latest
+          else
+            gh release create "v$VERSION" "$FILE" latest.json --title "Wayzerr $VERSION" --notes "Mirror of the Wayzerr $VERSION update." --latest
+          fi
